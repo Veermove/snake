@@ -7,7 +7,7 @@ use sdl2::keyboard::Keycode;
 
 
 fn main() -> Result<(), String>{
-    println!("Hello, world!");
+    println!("Hello, snake!");
     main_loop()
 }
 
@@ -17,14 +17,13 @@ const MARGIN: (u32, u32) = ((WINDOW_SIZE.0 - PLAY_AREA_SIZE.0)/2, (WINDOW_SIZE.1
 const SNAKE_SEGMENT_SIZE: u32 = 50;
 
 pub fn main_loop() -> Result<(), String> {
-    let init_name = "Visuals";
     let mut rng = rand::thread_rng();
     let background_color = Color::BLACK;
     let sdl_context = sdl2::init()?;
 
     let mut canvas = {
         let video = sdl_context.video()?;
-        let window = video.window(init_name, WINDOW_SIZE.0, WINDOW_SIZE.1)
+        let window = video.window("Ssnake", WINDOW_SIZE.0, WINDOW_SIZE.1)
             .position_centered()
             .build()
             .expect("Failed to create window");
@@ -85,7 +84,7 @@ pub fn main_loop() -> Result<(), String> {
         canvas.present();
         canvas.set_draw_color(background_color);
 
-        if frame >= 15 {
+        if frame >= 5 {
             let apple_eaten = snake[0].contains_rect(apple);
             let current_direction = calc_buffered_direction(&dirs);
             let next_snake = anim_snake_head(snake, current_direction, apple_eaten);
@@ -111,7 +110,6 @@ pub fn main_loop() -> Result<(), String> {
 
 fn anim_snake_head(mut prev_snake: Vec<Rect>, dirs: (i32, i32), apple_eaten: bool) -> Result<Vec<Rect>, ()> {
     let (dir_x, dir_y) = dirs;
-    println!("{:?}", prev_snake[0]);
 
     let head = calc_next_head(prev_snake.first().expect("Unr"), dir_x, dir_y);
 
@@ -160,7 +158,9 @@ fn calc_next_head(current_segment: &Rect, dir_x: i32, dir_y: i32) -> Rect {
 }
 
 fn calc_buffered_direction(directions: &Vec<(i32, i32)>) -> (i32, i32) {
+    // if input directions are opposite to current heading
     if directions[0] == directions.last().map(|(dirx, diry)| (-dirx, -diry)).expect("Unr!") {
+        // do not allow snake to turn around
         return directions[0];
     };
     *directions.last().expect("Unr!")
@@ -178,6 +178,7 @@ fn spawn_apple(rng: &mut ThreadRng, snake: &Vec<Rect>) -> Rect {
         if contained {
             x = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.0/SNAKE_SEGMENT_SIZE) + MARGIN.0;
             y = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.1/SNAKE_SEGMENT_SIZE) + MARGIN.1;
+            println!("CONT");
         } else {
             break;
         }
@@ -187,8 +188,7 @@ fn spawn_apple(rng: &mut ThreadRng, snake: &Vec<Rect>) -> Rect {
         let mut r = Rect::new(
             x as i32, y as i32, SNAKE_SEGMENT_SIZE/2, SNAKE_SEGMENT_SIZE/2
         );
-        Rect::center_on(
-            &mut r,
+        r.center_on(
             Point::new((x + SNAKE_SEGMENT_SIZE/2) as i32, (y + SNAKE_SEGMENT_SIZE/2) as i32)
         );
         r
