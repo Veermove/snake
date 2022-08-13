@@ -17,7 +17,6 @@ const MARGIN: (u32, u32) = ((WINDOW_SIZE.0 - PLAY_AREA_SIZE.0)/2, (WINDOW_SIZE.1
 const SNAKE_SEGMENT_SIZE: u32 = 50;
 
 pub fn main_loop() -> Result<(), String> {
-    let (init_size_x, init_size_y) = (1024, 1024);
     let init_name = "Visuals";
     let mut rng = rand::thread_rng();
     let background_color = Color::BLACK;
@@ -25,7 +24,7 @@ pub fn main_loop() -> Result<(), String> {
 
     let mut canvas = {
         let video = sdl_context.video()?;
-        let window = video.window(init_name, init_size_x, init_size_y)
+        let window = video.window(init_name, WINDOW_SIZE.0, WINDOW_SIZE.1)
             .position_centered()
             .build()
             .expect("Failed to create window");
@@ -47,7 +46,7 @@ pub fn main_loop() -> Result<(), String> {
     );
     let mut apple = spawn_apple(&mut rng, &snake);
 
-    let mut dirs = (1, 0);
+    let mut dirs = vec![(1, 0)];
     let mut frame = 0;
 
     'running: loop {
@@ -55,24 +54,16 @@ pub fn main_loop() -> Result<(), String> {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    if dirs != (1, 0) { // snake can't turn around in one move
-                        dirs = (-1, 0)
-                    }
+                    dirs.push((-1, 0));
                 }
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    if dirs != (-1, 0) {
-                        dirs = (1, 0)
-                    }
+                    dirs.push((1, 0));
                 }
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    if dirs != (0, 1) {
-                        dirs = (0, -1)
-                    }
+                    dirs.push((0, -1));
                 }
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    if dirs != (0, -1) {
-                        dirs = (0, 1)
-                    }
+                    dirs.push((0, 1));
                 }
                 _ => {}
             }
@@ -80,6 +71,7 @@ pub fn main_loop() -> Result<(), String> {
 
         canvas.clear();
         canvas.set_draw_color(Color::GREEN);
+        canvas.fill_rect(*snake.first().expect("Unr"))?;
         canvas.draw_rects(
             &snake
         )?;
@@ -95,7 +87,8 @@ pub fn main_loop() -> Result<(), String> {
 
         if frame >= 15 {
             let apple_eaten = snake[0].contains_rect(apple);
-            let next_snake = anim_snake_head(snake, dirs, apple_eaten);
+            let current_direction = calc_buffered_direction(&dirs);
+            let next_snake = anim_snake_head(snake, current_direction, apple_eaten);
             if next_snake.is_ok() {
                 snake = next_snake.expect("Unr!");
             } else {
@@ -105,6 +98,8 @@ pub fn main_loop() -> Result<(), String> {
                 apple = spawn_apple(&mut rng, &snake);
             }
 
+            dirs.clear();
+            dirs.push(current_direction);
             frame = 0;
         } else {
             frame += 1;
@@ -115,11 +110,7 @@ pub fn main_loop() -> Result<(), String> {
 }
 
 fn anim_snake_head(mut prev_snake: Vec<Rect>, dirs: (i32, i32), apple_eaten: bool) -> Result<Vec<Rect>, ()> {
-    // assert snake is moving
     let (dir_x, dir_y) = dirs;
-    assert!(dir_x == -1 || dir_x == 0 || dir_x == 1);
-    assert!(dir_y == -1 || dir_y == 0 || dir_y == 1);
-    assert!((dir_x, dir_y) != (0, 0));
     println!("{:?}", prev_snake[0]);
 
     let head = calc_next_head(prev_snake.first().expect("Unr"), dir_x, dir_y);
@@ -138,7 +129,7 @@ fn anim_snake_head(mut prev_snake: Vec<Rect>, dirs: (i32, i32), apple_eaten: boo
         let mut ns = Vec::with_capacity(prev_snake.len());
         ns.push(head);
 
-        // if snake ate appel, last segment should "duplicate" itself
+        // if snake has eaten apple, last segment should "duplicate" itself
         if !apple_eaten {
             prev_snake.pop();
         }
@@ -166,6 +157,13 @@ fn calc_next_head(current_segment: &Rect, dir_x: i32, dir_y: i32) -> Rect {
         current_segment.width(),
         current_segment.height()
     )
+}
+
+fn calc_buffered_direction(directions: &Vec<(i32, i32)>) -> (i32, i32) {
+    if directions[0] == directions.last().map(|(dirx, diry)| (-dirx, -diry)).expect("Unr!") {
+        return directions[0];
+    };
+    *directions.last().expect("Unr!")
 }
 
 fn spawn_apple(rng: &mut ThreadRng, snake: &Vec<Rect>) -> Rect {
