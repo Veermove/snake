@@ -1,12 +1,9 @@
 use rand::Rng;
-use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::rect::{Point, Rect};
 use sdl2::keyboard::Keycode;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
 
 
 fn main() -> Result<(), String>{
@@ -30,7 +27,6 @@ pub fn main_loop() -> Result<(), String> {
         let video = sdl_context.video()?;
         let window = video.window(init_name, init_size_x, init_size_y)
             .position_centered()
-            // .resizable()
             .build()
             .expect("Failed to create window");
         window.into_canvas()
@@ -40,9 +36,6 @@ pub fn main_loop() -> Result<(), String> {
             .expect("Failed to get render canvas")
     };
     let mut events = sdl_context.event_pump()?;
-    let (x_size, y_size) = canvas.output_size()?;
-
-    // let cell_size = x_size / DIMENSION;
 
     let mut snake = vec![
         Rect::new(
@@ -50,9 +43,9 @@ pub fn main_loop() -> Result<(), String> {
         ),
     ];
     let play_area = Rect::new(
-        MARGIN.0.try_into().unwrap(), MARGIN.1.try_into().unwrap(), PLAY_AREA_SIZE.0, PLAY_AREA_SIZE.1
+        MARGIN.0 as i32, MARGIN.1 as i32, PLAY_AREA_SIZE.0, PLAY_AREA_SIZE.1
     );
-    let mut apple = spawn_apple(&mut rng);
+    let mut apple = spawn_apple(&mut rng, &snake);
 
     let mut dirs = (1, 0);
     let mut frame = 0;
@@ -62,16 +55,24 @@ pub fn main_loop() -> Result<(), String> {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    dirs = (-1, 0)
+                    if dirs != (1, 0) { // snake can't turn around in one move
+                        dirs = (-1, 0)
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    dirs = (1, 0)
+                    if dirs != (-1, 0) {
+                        dirs = (1, 0)
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    dirs = (0, -1)
+                    if dirs != (0, 1) {
+                        dirs = (0, -1)
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    dirs = (0, 1)
+                    if dirs != (0, -1) {
+                        dirs = (0, 1)
+                    }
                 }
                 _ => {}
             }
@@ -93,15 +94,15 @@ pub fn main_loop() -> Result<(), String> {
         canvas.set_draw_color(background_color);
 
         if frame >= 15 {
-            let appel_eaten = snake[0].contains_rect(apple);
-            let next_snake = anim_snake_head(snake, dirs, appel_eaten);
+            let apple_eaten = snake[0].contains_rect(apple);
+            let next_snake = anim_snake_head(snake, dirs, apple_eaten);
             if next_snake.is_ok() {
                 snake = next_snake.expect("Unr!");
             } else {
                 break 'running;
             }
-            if appel_eaten {
-                apple = spawn_apple(&mut rng);
+            if apple_eaten {
+                apple = spawn_apple(&mut rng, &snake);
             }
 
             frame = 0;
@@ -147,6 +148,14 @@ fn anim_snake_head(mut prev_snake: Vec<Rect>, dirs: (i32, i32), apple_eaten: boo
         };
         ns
     };
+
+    // do not allow snake to bite itself
+    for segment in next_snake.iter().skip(1) {
+        if segment.x == next_snake[0].x && segment.y == next_snake[0].y {
+            return Err(());
+        }
+    }
+
     Ok(next_snake)
 }
 
@@ -159,9 +168,23 @@ fn calc_next_head(current_segment: &Rect, dir_x: i32, dir_y: i32) -> Rect {
     )
 }
 
-fn spawn_apple(rng: &mut ThreadRng) -> Rect {
-    let x = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.0/SNAKE_SEGMENT_SIZE) + MARGIN.0;
-    let y = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.1/SNAKE_SEGMENT_SIZE) + MARGIN.1;
+fn spawn_apple(rng: &mut ThreadRng, snake: &Vec<Rect>) -> Rect {
+    let mut x = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.0/SNAKE_SEGMENT_SIZE) + MARGIN.0;
+    let mut y = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.1/SNAKE_SEGMENT_SIZE) + MARGIN.1;
+
+    loop { // do not allow apple to spawn inside snake
+        let mut contained = false;
+        for snake_segment in snake {
+            contained = contained || (x, y) == (snake_segment.x as u32, snake_segment.y as u32)
+        }
+        if contained {
+            x = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.0/SNAKE_SEGMENT_SIZE) + MARGIN.0;
+            y = SNAKE_SEGMENT_SIZE * rng.gen_range(0..PLAY_AREA_SIZE.1/SNAKE_SEGMENT_SIZE) + MARGIN.1;
+        } else {
+            break;
+        }
+    }
+
     let rect = {
         let mut r = Rect::new(
             x as i32, y as i32, SNAKE_SEGMENT_SIZE/2, SNAKE_SEGMENT_SIZE/2
