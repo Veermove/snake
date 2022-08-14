@@ -47,22 +47,34 @@ pub fn main_loop() -> Result<(), String> {
 
     let mut dirs = vec![(1, 0)];
     let mut frame = 0;
+    let mut pause = false;
 
     'running: loop {
         for event in events.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                    dirs.push((-1, 0));
+                    if !pause {
+                        dirs.push((-1, 0));
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                    dirs.push((1, 0));
+                    if !pause {
+                        dirs.push((1, 0));
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                    dirs.push((0, -1));
+                    if !pause {
+                        dirs.push((0, -1));
+                    }
                 }
                 Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                    dirs.push((0, 1));
+                    if !pause {
+                        dirs.push((0, 1));
+                    }
+                }
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    pause = !pause;
                 }
                 _ => {}
             }
@@ -84,7 +96,7 @@ pub fn main_loop() -> Result<(), String> {
         canvas.present();
         canvas.set_draw_color(background_color);
 
-        if frame >= 5 {
+        if frame >= 5 && !pause {
             let apple_eaten = snake[0].contains_rect(apple);
             let current_direction = calc_buffered_direction(&dirs);
             let next_snake = anim_snake_head(snake, current_direction, apple_eaten);
